@@ -1,0 +1,7 @@
+name = "sir-backend"
+main = "build/worker.mjs"
+compatibility_date = "2024-09-01"
+account_id = "2712d214b23c083a4283f310728aa4bb"
+
+[build]
+command = "make build"
