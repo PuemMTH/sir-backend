@@ -4,7 +4,7 @@
 API_URL="https://sir.puem.me/"
 SETUP_SECRET="dev-secret-123"
 ADMIN_EMAIL="admin@example.com"
-ADMIN_PASS="password123"
+ADMIN_PASS="admin"
 CLIENT_ID="test-client"
 CLIENT_SECRET="client-secret-456"
 REDIRECT_URI="http://127.0.0.1:8080/callback"

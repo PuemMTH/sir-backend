@@ -110,6 +110,46 @@ const openapiJSON = `{
         }
       }
     },
+    "/register": {
+      "post": {
+        "tags": ["Users"],
+        "summary": "Register a new user account",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email":    { "type": "string" },
+                  "password": { "type": "string", "format": "password" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id":    { "type": "string" },
+                    "email": { "type": "string" },
+                    "role":  { "type": "string", "example": "user" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Missing email or password" },
+          "409": { "description": "Email already exists" }
+        }
+      }
+    },
     "/oauth/authorize": {
       "get": {
         "tags": ["OAuth"],

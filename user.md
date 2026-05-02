@@ -17,6 +17,38 @@ Authorization: Bearer <access_token>
 
 ## Public Routes
 
+### POST /register
+
+Register a new user account. Returns the new user's ID.
+
+**Request Body**
+
+```json
+{
+  "email": "user@example.com",
+  "password": "secret"
+}
+```
+
+**Response** `201 Created`
+
+```json
+{
+  "id": "abc123",
+  "email": "user@example.com",
+  "role": "user"
+}
+```
+
+**Errors**
+
+| Code | Reason |
+|------|--------|
+| 400 | Missing email or password |
+| 409 | Email already exists |
+
+---
+
 ### POST /setup
 
 Initialize the first admin user and OAuth client. Requires `SETUP_SECRET` env var.
@@ -293,6 +325,7 @@ Create a new user.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
+| POST | `/register` | None | Register a new user account |
 | POST | `/setup` | SETUP_SECRET | Create first admin + OAuth client |
 | GET | `/oauth/authorize` | None | Show login form |
 | POST | `/oauth/authorize` | None | Login and get auth code |

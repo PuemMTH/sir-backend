@@ -18,6 +18,11 @@ type TokenResponse struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+type authSuccessMsg struct {
+	accessToken  string
+	refreshToken string
+}
+
 func startAuthFlow() tea.Cmd {
 	return func() tea.Msg {
 		state := "random-state-123"
@@ -73,7 +78,10 @@ func startAuthFlow() tea.Cmd {
 			if err != nil {
 				return errMsg{fmt.Errorf("failed to exchange code: %v", err)}
 			}
-			return authSuccessMsg(tokenResp.AccessToken)
+			return authSuccessMsg{
+				accessToken:  tokenResp.AccessToken,
+				refreshToken: tokenResp.RefreshToken,
+			}
 		case err := <-errChan:
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()

@@ -27,6 +27,9 @@ func main() {
 	// Initial setup: creates first admin user + default client (runs once)
 	mux.HandleFunc("/setup", handler.Setup)
 
+	// Public: self-registration
+	mux.HandleFunc("/register", handler.Register)
+
 	// Protected: any authenticated user
 	mux.Handle("/api/me", middleware.Chain(
 		http.HandlerFunc(handler.Me),

@@ -12,6 +12,62 @@ import (
 	"github.com/puemmth/sir-backend/internal/token"
 )
 
+// Register handles POST /register — public user self-registration.
+func Register(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" || req.Password == "" {
+		middleware.WriteError(w, "invalid_request: email and password required", http.StatusBadRequest)
+		return
+	}
+
+	s, err := store.Open()
+	if err != nil {
+		middleware.WriteError(w, "server_error", http.StatusInternalServerError)
+		return
+	}
+	defer s.Close()
+
+	hash, salt, err := token.HashPassword(req.Password)
+	if err != nil {
+		middleware.WriteError(w, "server_error", http.StatusInternalServerError)
+		return
+	}
+	id, err := token.RandomString(16)
+	if err != nil {
+		middleware.WriteError(w, "server_error", http.StatusInternalServerError)
+		return
+	}
+
+	u := model.User{
+		ID:           id,
+		Email:        req.Email,
+		PasswordHash: hash,
+		Salt:         salt,
+		Role:         "user",
+		CreatedAt:    time.Now().Unix(),
+	}
+	if err := s.CreateUser(r.Context(), u); err != nil {
+		middleware.WriteError(w, "conflict: email already exists", http.StatusConflict)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{
+		"id":    u.ID,
+		"email": u.Email,
+		"role":  u.Role,
+	})
+}
+
 // Me returns the authenticated user's profile.
 func Me(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.ClaimsFromCtx(r.Context())
