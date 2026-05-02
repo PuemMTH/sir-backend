@@ -12,7 +12,7 @@ build:
 build-std:
 	mkdir -p build
 	go run github.com/syumai/workers/cmd/workers-assets-gen -mode=go
-	GOOS=js GOARCH=wasm go build -o build/app.wasm .
+	GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o build/app.wasm .
 	du -h build/app.wasm
 
 deploy: build
