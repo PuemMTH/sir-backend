@@ -104,7 +104,8 @@ else
 fi
 
 # 6. Test Token Refresh
-echo -n "Testing refresh token rotation... "
+echo -n "Testing refresh token rotation (waiting 1s)... "
+sleep 1
 REFRESH_RES=$(curl -s -X POST "$API_URL/oauth/token" \
     -d "grant_type=refresh_token" \
     -d "refresh_token=$REFRESH_TOKEN" \

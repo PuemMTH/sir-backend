@@ -27,7 +27,8 @@ func Open() (*Store, error) {
 	}
 	sqlDB := sql.OpenDB(connector)
 	gormDB, err := gorm.Open(newDialector(sqlDB), &gorm.Config{
-		Logger: defaultLogger(),
+		Logger:                 defaultLogger(),
+		SkipDefaultTransaction: true,
 	})
 	if err != nil {
 		sqlDB.Close()

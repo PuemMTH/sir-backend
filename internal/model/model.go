@@ -43,6 +43,11 @@ type OAuthClient struct {
 	RefreshTokens []RefreshToken `gorm:"foreignKey:ClientID"`
 }
 
+// TableName overrides the default table name for OAuthClient
+func (OAuthClient) TableName() string {
+	return "oauth_clients"
+}
+
 // AuthCode is a single-use authorization code (expires in 10 minutes).
 type AuthCode struct {
 	Code        string `gorm:"column:code;primaryKey"`

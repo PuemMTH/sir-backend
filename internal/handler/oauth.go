@@ -177,10 +177,14 @@ func exchangeAuthCode(w http.ResponseWriter, r *http.Request) {
 
 	ac, err := s.ConsumeAuthCode(r.Context(), code)
 	if err != nil {
+		if err.Error() == "code invalid or expired" {
+			middleware.WriteOAuthError(w, "invalid_grant", http.StatusBadRequest)
+			return
+		}
 		middleware.WriteOAuthError(w, "server_error", http.StatusInternalServerError)
 		return
 	}
-	if ac == nil || ac.Used || time.Now().Unix() > ac.ExpiresAt || ac.ClientID != clientID {
+	if ac == nil || time.Now().Unix() > ac.ExpiresAt || ac.ClientID != clientID {
 		middleware.WriteOAuthError(w, "invalid_grant", http.StatusBadRequest)
 		return
 	}
