@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Configuration
-API_URL="http://localhost:8787"
+API_URL="https://sir.puem.me/"
 SETUP_SECRET="dev-secret-123"
 ADMIN_EMAIL="admin@example.com"
 ADMIN_PASS="password123"
