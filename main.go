@@ -31,6 +31,16 @@ func main() {
 		middleware.AuthMiddleware,
 	))
 
+	mux.Handle("/api/notes", middleware.Chain(
+		http.HandlerFunc(handler.Notes),
+		middleware.AuthMiddleware,
+	))
+
+	mux.Handle("/api/notes/", middleware.Chain(
+		http.HandlerFunc(handler.NoteDetail),
+		middleware.AuthMiddleware,
+	))
+
 	// Protected: admin only
 	mux.Handle("/api/admin/users", middleware.Chain(
 		http.HandlerFunc(handler.AdminUsers),

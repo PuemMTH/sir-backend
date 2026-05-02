@@ -169,3 +169,43 @@ func (s *Store) RevokeRefreshToken(ctx context.Context, rawToken string) error {
 		Where("token = ?", rawToken).
 		Update("revoked", true).Error
 }
+
+// ── Notes ────────────────────────────────────────────────────────────────────
+
+func (s *Store) CreateNote(ctx context.Context, userID, title, content string) (*model.Note, error) {
+	n := &model.Note{
+		UserID:  userID,
+		Title:   title,
+		Content: content,
+	}
+	if err := s.db.WithContext(ctx).Create(n).Error; err != nil {
+		return nil, err
+	}
+	return n, nil
+}
+
+func (s *Store) ListNotes(ctx context.Context, userID string) ([]model.Note, error) {
+	var notes []model.Note
+	err := s.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Order("created_at DESC").
+		Find(&notes).Error
+	return notes, err
+}
+
+func (s *Store) GetNote(ctx context.Context, userID, noteID string) (*model.Note, error) {
+	var n model.Note
+	err := s.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", noteID, userID).
+		Take(&n).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &n, err
+}
+
+func (s *Store) DeleteNote(ctx context.Context, userID, noteID string) error {
+	return s.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", noteID, userID).
+		Delete(&model.Note{}).Error
+}

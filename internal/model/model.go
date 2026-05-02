@@ -19,6 +19,7 @@ type User struct {
 	// Associations
 	AuthCodes     []AuthCode     `gorm:"foreignKey:UserID"`
 	RefreshTokens []RefreshToken `gorm:"foreignKey:UserID"`
+	Notes         []Note         `gorm:"foreignKey:UserID"`
 }
 
 func (u *User) BeforeCreate(tx *gorm.DB) error {
@@ -101,6 +102,30 @@ func (rt *RefreshToken) BeforeCreate(tx *gorm.DB) error {
 	}
 	if rt.ExpiresAt == 0 {
 		rt.ExpiresAt = time.Now().Add(token.RefreshTokenTTL).Unix()
+	}
+	return nil
+}
+
+// Note represents a private note owned by a user.
+type Note struct {
+	ID        string `gorm:"column:id;primaryKey"`
+	UserID    string `gorm:"column:user_id;not null;index"`
+	Title     string `gorm:"column:title;not null"`
+	Content   string `gorm:"column:content;not null"`
+	CreatedAt int64  `gorm:"column:created_at;autoCreateTime:unix"`
+	UpdatedAt int64  `gorm:"column:updated_at;autoUpdateTime:unix"`
+
+	// Associations
+	User User `gorm:"foreignKey:UserID"`
+}
+
+func (n *Note) BeforeCreate(tx *gorm.DB) error {
+	if n.ID == "" {
+		id, err := token.RandomString(12)
+		if err != nil {
+			return err
+		}
+		n.ID = id
 	}
 	return nil
 }

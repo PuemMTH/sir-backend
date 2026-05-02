@@ -103,6 +103,33 @@ else
     exit 1
 fi
 
+# 5.1 Test Resource Access (Notes)
+echo -n "Testing private resource CRUD (Notes)... "
+NOTE_RES=$(curl -s -X POST "$API_URL/api/notes" \
+    -H "Authorization: Bearer $ACCESS_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"title":"Test Note","content":"This is a private note."}')
+
+NOTE_ID=$(echo "$NOTE_RES" | grep -oE '"id":"[^"]+"' | cut -d'"' -f4)
+if [ -z "$NOTE_ID" ]; then
+    # Fallback to uppercase ID if needed, though GORM/JSON usually uses lowercase if tagged
+    NOTE_ID=$(echo "$NOTE_RES" | grep -oE '"ID":"[^"]+"' | cut -d'"' -f4)
+fi
+
+if [ -n "$NOTE_ID" ]; then
+    LIST_RES=$(curl -s -H "Authorization: Bearer $ACCESS_TOKEN" "$API_URL/api/notes")
+    if echo "$LIST_RES" | grep -q "$NOTE_ID"; then
+        echo -e "${GREEN}SUCCESS${NC} (Note $NOTE_ID created and verified)"
+    else
+        echo -e "${RED}FAILED${NC} (Note created but not found in list)"
+        exit 1
+    fi
+else
+    echo -e "${RED}FAILED${NC} (Could not create note)"
+    echo "Response: $NOTE_RES"
+    exit 1
+fi
+
 # 6. Test Token Refresh
 echo -n "Testing refresh token rotation (waiting 1s)... "
 sleep 1
