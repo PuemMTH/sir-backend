@@ -2,55 +2,54 @@ package main
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 
 	"github.com/syumai/workers"
+
+	"github.com/puemmth/sir-backend/internal/handler"
+	"github.com/puemmth/sir-backend/internal/middleware"
 )
 
 func main() {
 	mux := http.NewServeMux()
+
+	// Public
 	mux.HandleFunc("/", handleRoot)
 	mux.HandleFunc("/health", handleHealth)
-	mux.HandleFunc("/hello", handleHello)
-	mux.HandleFunc("/echo", handleEcho)
+
+	// OAuth 2.0 Authorization Code Flow (Loopback Interface Redirection — RFC 8252)
+	mux.HandleFunc("/oauth/authorize", handler.Authorize)
+	mux.HandleFunc("/oauth/token", handler.Token)
+	mux.HandleFunc("/oauth/revoke", handler.Revoke)
+
+	// Initial setup: creates first admin user + default client (runs once)
+	mux.HandleFunc("/setup", handler.Setup)
+
+	// Protected: any authenticated user
+	mux.Handle("/api/me", middleware.Chain(
+		http.HandlerFunc(handler.Me),
+		middleware.AuthMiddleware,
+	))
+
+	// Protected: admin only
+	mux.Handle("/api/admin/users", middleware.Chain(
+		http.HandlerFunc(handler.AdminUsers),
+		middleware.AuthMiddleware,
+		middleware.RequireRole("admin"),
+	))
+
 	workers.Serve(mux)
 }
 
 func handleRoot(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
-	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"name":    "sir-backend",
 		"version": "1.0.0",
-		"status":  "running",
 	})
 }
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
-}
-
-func handleHello(w http.ResponseWriter, r *http.Request) {
-	name := r.URL.Query().Get("name")
-	if name == "" {
-		name = "World"
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Hello, " + name + "!"})
-}
-
-func handleEcho(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if ct := r.Header.Get("Content-Type"); ct != "" {
-		w.Header().Set("Content-Type", ct)
-	}
-	io.Copy(w, r.Body)
 }

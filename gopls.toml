@@ -1,0 +1,4 @@
+build.envVars = [
+    "GOOS=js",
+    "GOARCH=wasm"
+]
