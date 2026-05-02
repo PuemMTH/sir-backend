@@ -13,6 +13,7 @@ build-std:
 	mkdir -p build
 	go run github.com/syumai/workers/cmd/workers-assets-gen -mode=go
 	GOOS=js GOARCH=wasm go build -o build/app.wasm .
+	du -h build/app.wasm
 
 deploy: build
 	wrangler deploy
