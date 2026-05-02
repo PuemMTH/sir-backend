@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/puemmth/sir-backend/internal/middleware"
@@ -20,6 +21,52 @@ func Me(w http.ResponseWriter, r *http.Request) {
 		"email": claims.Email,
 		"role":  claims.Role,
 		"scope": claims.Scope,
+	})
+}
+
+// GetUser handles GET /api/users/{id}.
+// A user may only fetch their own profile; admin may fetch any.
+func GetUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	targetID := strings.TrimPrefix(r.URL.Path, "/api/users/")
+	if targetID == "" {
+		middleware.WriteError(w, "missing user id", http.StatusBadRequest)
+		return
+	}
+
+	claims := middleware.ClaimsFromCtx(r.Context())
+	if claims.Role != "admin" && claims.Sub != targetID {
+		middleware.WriteError(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	s, err := store.Open()
+	if err != nil {
+		middleware.WriteError(w, "server_error", http.StatusInternalServerError)
+		return
+	}
+	defer s.Close()
+
+	u, err := s.GetUserByID(r.Context(), targetID)
+	if err != nil {
+		middleware.WriteError(w, "server_error", http.StatusInternalServerError)
+		return
+	}
+	if u == nil {
+		middleware.WriteError(w, "user not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"id":         u.ID,
+		"email":      u.Email,
+		"role":       u.Role,
+		"created_at": u.CreatedAt,
 	})
 }
 

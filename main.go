@@ -16,6 +16,8 @@ func main() {
 	// Public
 	mux.HandleFunc("/", handleRoot)
 	mux.HandleFunc("/health", handleHealth)
+	mux.HandleFunc("/api/docs/openapi.json", handler.DocsJSON)
+	mux.HandleFunc("/api/docs", handler.DocsUI)
 
 	// OAuth 2.0 Authorization Code Flow (Loopback Interface Redirection — RFC 8252)
 	mux.HandleFunc("/oauth/authorize", handler.Authorize)
@@ -41,11 +43,16 @@ func main() {
 		middleware.AuthMiddleware,
 	))
 
-	// Protected: admin only
+	// Protected: any authenticated user
+	mux.Handle("/api/users/", middleware.Chain(
+		http.HandlerFunc(handler.GetUser),
+		middleware.AuthMiddleware,
+	))
+
+	// Protected: any authenticated user (list + create)
 	mux.Handle("/api/admin/users", middleware.Chain(
 		http.HandlerFunc(handler.AdminUsers),
 		middleware.AuthMiddleware,
-		middleware.RequireRole("admin"),
 	))
 
 	workers.Serve(mux)

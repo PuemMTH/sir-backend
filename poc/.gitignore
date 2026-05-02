@@ -1,9 +1,6 @@
 # Build output
-build/
-
-# Cloudflare / Wrangler
-.wrangler/
-.dev.vars
+poc
+*.exe
 
 # Go
 go.sum
