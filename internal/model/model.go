@@ -155,6 +155,17 @@ func (f *LatexFile) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+// PDFCache records a compiled PDF's R2 location keyed by MD5(engine+":"+source).
+type PDFCache struct {
+	SourceHash string `gorm:"column:source_hash;primaryKey" json:"source_hash"`
+	R2Key      string `gorm:"column:r2_key;not null"         json:"r2_key"`
+	Engine     string `gorm:"column:engine;not null"         json:"engine"`
+	CreatedAt  int64  `gorm:"column:created_at;autoCreateTime:unix" json:"created_at"`
+}
+
+// TableName overrides GORM's default pluralisation (pdf_caches → pdf_cache).
+func (PDFCache) TableName() string { return "pdf_cache" }
+
 // SystemLog represents an administrative action taken in the system.
 type SystemLog struct {
 	ID        string `gorm:"column:id;primaryKey" json:"id"`

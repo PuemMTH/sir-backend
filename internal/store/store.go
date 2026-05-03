@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -281,6 +282,32 @@ func (s *Store) UpdateLatexFile(ctx context.Context, f *model.LatexFile) (*model
 	}
 	f.UpdatedAt = now
 	return f, nil
+}
+
+// ── PDF Cache ────────────────────────────────────────────────────────────────
+
+// GetPDFCache returns a cached entry by its MD5 hash, or nil if not found.
+func (s *Store) GetPDFCache(ctx context.Context, sourceHash string) (*model.PDFCache, error) {
+	var c model.PDFCache
+	err := s.db.WithContext(ctx).Where("source_hash = ?", sourceHash).Take(&c).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &c, err
+}
+
+// CreatePDFCache inserts a new cache entry. Duplicate inserts are silently ignored.
+func (s *Store) CreatePDFCache(ctx context.Context, sourceHash, r2Key, engine string) error {
+	c := &model.PDFCache{
+		SourceHash: sourceHash,
+		R2Key:      r2Key,
+		Engine:     engine,
+	}
+	err := s.db.WithContext(ctx).Create(c).Error
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		return nil // already cached — not an error
+	}
+	return err
 }
 
 func (s *Store) DeleteLatexFile(ctx context.Context, userID, fileID string) error {

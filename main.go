@@ -46,6 +46,11 @@ func main() {
 		middleware.AuthMiddleware,
 	))
 
+	mux.Handle("/api/compile", middleware.Chain(
+		http.HandlerFunc(handler.Compile),
+		middleware.AuthMiddleware,
+	))
+
 	mux.Handle("/api/latex-files", middleware.Chain(
 		http.HandlerFunc(handler.LatexFiles),
 		middleware.AuthMiddleware,

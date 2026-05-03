@@ -45,6 +45,30 @@ const openapiJSON = `{
           "updated_at": { "type": "integer" }
         }
       },
+      "LatexFile": {
+        "type": "object",
+        "properties": {
+          "id":         { "type": "string" },
+          "user_id":    { "type": "string" },
+          "name":       { "type": "string" },
+          "r2_key":     { "type": "string" },
+          "engine":     { "type": "string", "enum": ["lualatex", "pdflatex", "xelatex"] },
+          "created_at": { "type": "integer" },
+          "updated_at": { "type": "integer" }
+        }
+      },
+      "LatexFileWithContent": {
+        "type": "object",
+        "properties": {
+          "id":         { "type": "string" },
+          "user_id":    { "type": "string" },
+          "name":       { "type": "string" },
+          "engine":     { "type": "string", "enum": ["lualatex", "pdflatex", "xelatex"] },
+          "content":    { "type": "string" },
+          "created_at": { "type": "integer" },
+          "updated_at": { "type": "integer" }
+        }
+      },
       "TokenResponse": {
         "type": "object",
         "properties": {
@@ -421,6 +445,167 @@ const openapiJSON = `{
           },
           "400": { "description": "Title required" },
           "401": { "description": "Invalid or missing token" }
+        }
+      }
+    },
+    "/api/compile": {
+      "post": {
+        "tags": ["LaTeX"],
+        "summary": "Compile LaTeX source to PDF (cached by MD5)",
+        "description": "Computes MD5(engine+source). Returns a cached PDF from R2 on a hit (X-Cache: HIT), or calls the upstream compile server, stores the result, and returns it on a miss (X-Cache: MISS).",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["source"],
+                "properties": {
+                  "source": { "type": "string", "description": "Full LaTeX source" },
+                  "engine": { "type": "string", "enum": ["lualatex", "pdflatex", "xelatex"], "default": "lualatex" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "PDF bytes",
+            "headers": {
+              "X-Cache": { "schema": { "type": "string", "enum": ["HIT", "MISS"] } }
+            },
+            "content": { "application/pdf": { "schema": { "type": "string", "format": "binary" } } }
+          },
+          "400": { "description": "Missing or empty source" },
+          "401": { "description": "Invalid or missing token" },
+          "422": { "description": "Compile error", "content": { "application/json": { "schema": { "type": "object", "properties": { "error": { "type": "string" }, "log": { "type": "string" } } } } } },
+          "502": { "description": "Compile server unreachable" }
+        }
+      }
+    },
+    "/api/latex-files": {
+      "get": {
+        "tags": ["LaTeX"],
+        "summary": "List LaTeX files for authenticated user",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/LatexFile" }
+                }
+              }
+            }
+          },
+          "401": { "description": "Invalid or missing token" }
+        }
+      },
+      "post": {
+        "tags": ["LaTeX"],
+        "summary": "Create a new LaTeX file",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name":    { "type": "string" },
+                  "content": { "type": "string", "default": "" },
+                  "engine":  { "type": "string", "enum": ["lualatex", "pdflatex", "xelatex"], "default": "lualatex" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LatexFile" }
+              }
+            }
+          },
+          "400": { "description": "Missing name" },
+          "401": { "description": "Invalid or missing token" }
+        }
+      }
+    },
+    "/api/latex-files/{id}": {
+      "get": {
+        "tags": ["LaTeX"],
+        "summary": "Get a LaTeX file with content",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LatexFileWithContent" }
+              }
+            }
+          },
+          "401": { "description": "Invalid or missing token" },
+          "404": { "description": "Not found" }
+        }
+      },
+      "put": {
+        "tags": ["LaTeX"],
+        "summary": "Update a LaTeX file (name, engine, and/or content)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name":    { "type": "string" },
+                  "content": { "type": "string" },
+                  "engine":  { "type": "string", "enum": ["lualatex", "pdflatex", "xelatex"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LatexFile" }
+              }
+            }
+          },
+          "400": { "description": "Invalid request body" },
+          "401": { "description": "Invalid or missing token" },
+          "404": { "description": "Not found" }
+        }
+      },
+      "delete": {
+        "tags": ["LaTeX"],
+        "summary": "Delete a LaTeX file",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "401": { "description": "Invalid or missing token" },
+          "404": { "description": "Not found" }
         }
       }
     },

@@ -321,6 +321,192 @@ Create a new user.
 
 ---
 
+### POST /api/compile
+
+Compile LaTeX source to PDF with automatic caching. The backend computes `MD5(engine + ":" + source)` and checks the `pdf_cache` table before calling the compile server.
+
+- **Cache hit** (`X-Cache: HIT`) — PDF returned directly from R2, no compilation cost.
+- **Cache miss** (`X-Cache: MISS`) — Proxied to the upstream compile server. On success the PDF is stored in R2 and the hash recorded in D1 for future requests.
+
+**Request Body**
+
+```json
+{
+  "source": "\\documentclass{article}...",
+  "engine": "lualatex"
+}
+```
+
+| Field | Required | Values |
+|-------|----------|--------|
+| `source` | Yes | Full LaTeX source |
+| `engine` | No | `lualatex` (default), `pdflatex`, `xelatex` |
+
+**Response** `200 OK` — `application/pdf` binary
+
+| Header | Values |
+|--------|--------|
+| `X-Cache` | `HIT` or `MISS` |
+
+**Error Response** `422 Unprocessable Entity`
+
+```json
+{
+  "error": "compilation failed",
+  "log": "...LaTeX log output..."
+}
+```
+
+**Errors**
+
+| Code | Reason |
+|------|--------|
+| 400 | Missing or empty `source` |
+| 401 | Invalid token |
+| 422 | LaTeX compilation error (log included) |
+| 502 | Compile server unreachable |
+
+---
+
+### GET /api/latex-files
+
+List all LaTeX files owned by the authenticated user, ordered by last updated (newest first).
+
+**Response** `200 OK`
+
+```json
+[
+  {
+    "id": "abc123",
+    "user_id": "xyz789",
+    "name": "thesis.tex",
+    "r2_key": "latex/xyz789/abc123.tex",
+    "engine": "lualatex",
+    "created_at": 1714000000,
+    "updated_at": 1714003600
+  }
+]
+```
+
+**Errors**
+
+| Code | Reason |
+|------|--------|
+| 401 | Invalid token |
+
+---
+
+### POST /api/latex-files
+
+Create a new LaTeX file. Content is stored in R2; metadata is stored in D1.
+
+**Request Body**
+
+```json
+{
+  "name": "thesis.tex",
+  "content": "\\documentclass{article}...",
+  "engine": "lualatex"
+}
+```
+
+| Field | Required | Values |
+|-------|----------|--------|
+| `name` | Yes | File display name |
+| `content` | No | LaTeX source (default: empty) |
+| `engine` | No | `lualatex` (default), `pdflatex`, `xelatex` |
+
+**Response** `201 Created` — metadata only (no `content` field)
+
+```json
+{
+  "id": "abc123",
+  "user_id": "xyz789",
+  "name": "thesis.tex",
+  "r2_key": "latex/xyz789/abc123.tex",
+  "engine": "lualatex",
+  "created_at": 1714000000,
+  "updated_at": 1714000000
+}
+```
+
+**Errors**
+
+| Code | Reason |
+|------|--------|
+| 400 | Missing `name` |
+| 401 | Invalid token |
+
+---
+
+### GET /api/latex-files/:id
+
+Fetch file metadata from D1 and content from R2.
+
+**Response** `200 OK`
+
+```json
+{
+  "id": "abc123",
+  "user_id": "xyz789",
+  "name": "thesis.tex",
+  "engine": "lualatex",
+  "content": "\\documentclass{article}...",
+  "created_at": 1714000000,
+  "updated_at": 1714003600
+}
+```
+
+**Errors**
+
+| Code | Reason |
+|------|--------|
+| 401 | Invalid token |
+| 404 | File not found or not owned by user |
+
+---
+
+### PUT /api/latex-files/:id
+
+Update name, engine, and/or content. All fields are optional. If `content` is provided, the R2 object is overwritten in-place.
+
+**Request Body** (all fields optional)
+
+```json
+{
+  "name": "renamed.tex",
+  "content": "\\documentclass{article}...",
+  "engine": "xelatex"
+}
+```
+
+**Response** `200 OK` — updated metadata (no `content` field)
+
+**Errors**
+
+| Code | Reason |
+|------|--------|
+| 400 | Invalid JSON body |
+| 401 | Invalid token |
+| 404 | File not found or not owned by user |
+
+---
+
+### DELETE /api/latex-files/:id
+
+Delete the file from R2 (best-effort) and remove the D1 row.
+
+**Response** `204 No Content`
+
+**Errors**
+
+| Code | Reason |
+|------|--------|
+| 401 | Invalid token |
+| 404 | File not found or not owned by user |
+
+---
+
 ## Route Summary
 
 | Method | Path | Auth | Description |
@@ -335,6 +521,12 @@ Create a new user.
 | GET | `/api/users/:id` | JWT | Get user by ID (own or any if admin) |
 | GET | `/api/admin/users` | JWT | List all users |
 | POST | `/api/admin/users` | JWT | Create new user |
+| POST | `/api/compile` | JWT | Compile LaTeX to PDF (MD5-cached) |
+| GET | `/api/latex-files` | JWT | List own LaTeX files |
+| POST | `/api/latex-files` | JWT | Create a new LaTeX file |
+| GET | `/api/latex-files/:id` | JWT | Get file metadata + content |
+| PUT | `/api/latex-files/:id` | JWT | Update name, engine, or content |
+| DELETE | `/api/latex-files/:id` | JWT | Delete a LaTeX file |
 
 ---
 

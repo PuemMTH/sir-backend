@@ -299,22 +299,34 @@ func Revoke(w http.ResponseWriter, r *http.Request) {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-// isLoopbackURI returns true when the URI targets a loopback interface (RFC 8252 §8.3).
+// isLoopbackURI returns true when the URI targets a loopback interface (RFC 8252 §8.3)
+// or is a valid https:// URI (RFC 6749 / RFC 8252 §8.2 for web clients).
 func isLoopbackURI(rawURI string) bool {
 	u, err := url.Parse(rawURI)
-	if err != nil || u.Scheme != "http" {
+	if err != nil {
 		return false
 	}
-	h := u.Hostname()
-	return h == "127.0.0.1" || h == "localhost" || h == "::1"
+	if u.Scheme == "https" {
+		return true
+	}
+	if u.Scheme == "http" {
+		h := u.Hostname()
+		return h == "127.0.0.1" || h == "localhost" || h == "::1"
+	}
+	return false
 }
 
-// loopbackURIMatches compares two loopback URIs ignoring the port number (RFC 8252 §7.3).
+// loopbackURIMatches compares two redirect URIs.
+// For loopback (http) URIs the port is ignored per RFC 8252 §7.3.
+// For https:// URIs an exact string match is required.
 func loopbackURIMatches(registered, request string) bool {
 	reg, err1 := url.Parse(registered)
 	req, err2 := url.Parse(request)
 	if err1 != nil || err2 != nil {
 		return false
+	}
+	if reg.Scheme == "https" {
+		return registered == request
 	}
 	return reg.Scheme == req.Scheme &&
 		strings.EqualFold(reg.Hostname(), req.Hostname()) &&
@@ -395,24 +407,24 @@ const loginFormHTML = `<!DOCTYPE html>
 <body class="min-h-screen flex items-center justify-center relative">
   <div class="ambient-orb orb-1 bg-violet-600/30 w-[500px] h-[500px] top-[-10%%] left-[-10%%] blur-[80px]"></div>
   <div class="ambient-orb orb-2 bg-indigo-600/20 w-[600px] h-[600px] bottom-[-20%%] right-[-10%%] blur-[100px]"></div>
-  
+
   <div class="relative z-10 w-full max-w-md px-6 animate-slide-up">
     <div class="glass-panel rounded-3xl p-10 flex flex-col items-center text-center">
       <div class="w-20 h-20 mb-6 flex items-center justify-center rounded-3xl bg-gradient-to-tr from-violet-500/20 to-fuchsia-500/20 border border-white/20 shadow-[0_0_30px_rgba(139,92,246,0.3)]">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-10 h-10 text-white"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
       </div>
-      
+
       <h1 class="text-3xl font-extrabold tracking-tight mb-2 bg-gradient-to-br from-white via-indigo-100 to-indigo-400 bg-clip-text text-transparent">Authorize Access</h1>
       <p class="text-slate-400 text-sm font-medium tracking-wide mb-8 uppercase">SIGN IN TO %s</p>
-      
+
       %s
-      
+
       <form method="POST" action="/oauth/authorize" class="w-full flex flex-col gap-5 text-left">
         <input type="hidden" name="client_id" value="%s">
         <input type="hidden" name="redirect_uri" value="%s">
         <input type="hidden" name="state" value="%s">
         <input type="hidden" name="scope" value="%s">
-        
+
         <div class="form-control w-full">
           <div class="relative">
             <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -421,7 +433,7 @@ const loginFormHTML = `<!DOCTYPE html>
             <input type="email" name="email" required placeholder="Email Address" class="input w-full pl-12 bg-slate-900/50 border border-white/10 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all rounded-xl h-12">
           </div>
         </div>
-        
+
         <div class="form-control w-full">
           <div class="relative">
             <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -430,7 +442,7 @@ const loginFormHTML = `<!DOCTYPE html>
             <input type="password" name="password" required placeholder="Password" class="input w-full pl-12 bg-slate-900/50 border border-white/10 text-white placeholder-slate-500 focus:border-fuchsia-500 focus:ring-1 focus:ring-fuchsia-500 transition-all rounded-xl h-12">
           </div>
         </div>
-        
+
         <button type="submit" class="btn glass-btn w-full h-14 mt-2 rounded-2xl text-white font-semibold text-lg shadow-lg">Authenticate</button>
       </form>
     </div>
