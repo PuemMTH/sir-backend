@@ -1,0 +1,9 @@
+services:
+  latex-server:
+    networks:
+      - default
+
+networks:
+  ipuserver_webserver:
+    name: ipuserver_webserver
+    driver: bridge
