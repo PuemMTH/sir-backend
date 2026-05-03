@@ -58,6 +58,16 @@ func main() {
 		middleware.AuthMiddleware,
 	))
 
+	mux.Handle("/api/admin/users/", middleware.Chain(
+		http.HandlerFunc(handler.AdminUserDetail),
+		middleware.AuthMiddleware,
+	))
+
+	mux.Handle("/api/admin/logs", middleware.Chain(
+		http.HandlerFunc(handler.AdminLogs),
+		middleware.AuthMiddleware,
+	))
+
 	workers.Serve(middleware.CORSMiddleware(mux))
 }
 

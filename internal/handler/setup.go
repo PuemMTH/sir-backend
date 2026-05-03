@@ -96,6 +96,13 @@ func Setup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.CreateSystemLog(r.Context(), model.SystemLog{
+		Action:   "SYSTEM_SETUP",
+		TargetID: adminID,
+		AdminID:  "SYSTEM",
+		Details:  "Initial setup completed. Created admin: " + req.AdminEmail,
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{

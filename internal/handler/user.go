@@ -59,6 +59,13 @@ func Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.CreateSystemLog(r.Context(), model.SystemLog{
+		Action:   "REGISTER_USER",
+		TargetID: u.ID,
+		AdminID:  "SELF_REGISTER",
+		Details:  "User registered via /register: " + u.Email,
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{
@@ -192,6 +199,14 @@ func AdminUsers(w http.ResponseWriter, r *http.Request) {
 			middleware.WriteError(w, "conflict: email already exists", http.StatusConflict)
 			return
 		}
+
+		claims := middleware.ClaimsFromCtx(r.Context())
+		s.CreateSystemLog(r.Context(), model.SystemLog{
+			Action:   "CREATE_USER_BY_ADMIN",
+			TargetID: u.ID,
+			AdminID:  claims.Sub,
+			Details:  "Admin created new user via /api/admin/users: " + u.Email + " with role " + u.Role,
+		})
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)

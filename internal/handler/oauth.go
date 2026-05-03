@@ -11,6 +11,7 @@ import (
 	"github.com/syumai/workers/cloudflare"
 
 	"github.com/puemmth/sir-backend/internal/middleware"
+	"github.com/puemmth/sir-backend/internal/model"
 	"github.com/puemmth/sir-backend/internal/store"
 	"github.com/puemmth/sir-backend/internal/token"
 )
@@ -43,7 +44,6 @@ func showLoginForm(w http.ResponseWriter, r *http.Request) {
 		middleware.WriteError(w, "invalid_request: missing client_id or redirect_uri", http.StatusBadRequest)
 		return
 	}
-	// RFC 8252 §8.3: only loopback redirect URIs are permitted
 	if !isLoopbackURI(redirectURI) {
 		middleware.WriteError(w, "invalid_request: redirect_uri must be a loopback address (RFC 8252 §8.3)", http.StatusBadRequest)
 		return
@@ -66,15 +66,7 @@ func showLoginForm(w http.ResponseWriter, r *http.Request) {
 		scope = "openid"
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, loginFormHTML,
-		htmlEscape(client.Name),
-		htmlEscape(client.Name),
-		htmlEscape(clientID),
-		htmlEscape(redirectURI),
-		htmlEscape(state),
-		htmlEscape(scope),
-	)
+	renderLoginForm(w, client.Name, clientID, redirectURI, state, scope, "")
 }
 
 func processAuthorize(w http.ResponseWriter, r *http.Request) {
@@ -110,7 +102,7 @@ func processAuthorize(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.GetUserByEmail(r.Context(), email)
 	if err != nil || user == nil || !token.VerifyPassword(password, user.PasswordHash, user.Salt) {
-		redirectWithError(w, r, redirectURI, state, "access_denied")
+		renderLoginForm(w, client.Name, clientID, redirectURI, state, scope, "Incorrect email or password. Please try again.")
 		return
 	}
 
@@ -211,6 +203,13 @@ func exchangeAuthCode(w http.ResponseWriter, r *http.Request) {
 		middleware.WriteOAuthError(w, "server_error", http.StatusInternalServerError)
 		return
 	}
+
+	s.CreateSystemLog(r.Context(), model.SystemLog{
+		Action:   "USER_LOGIN",
+		TargetID: user.ID,
+		AdminID:  user.ID,
+		Details:  "User logged in via Authorization Code: " + user.Email,
+	})
 
 	writeTokenResponse(w, accessToken, rt.Token, ac.Scope)
 }
@@ -350,39 +349,91 @@ func htmlEscape(s string) string {
 	return s
 }
 
-// loginFormHTML — format args: appName, appName, clientID, redirectURI, state, scope
+func renderLoginForm(w http.ResponseWriter, clientName, clientID, redirectURI, state, scope, errorMsg string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	errorHTML := ""
+	if errorMsg != "" {
+		errorHTML = fmt.Sprintf(`
+		<div class="w-full p-4 mb-6 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm flex items-start gap-3 text-left">
+		  <svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+		  <span>%s</span>
+		</div>`, htmlEscape(errorMsg))
+	}
+
+	fmt.Fprintf(w, loginFormHTML,
+		htmlEscape(clientName),
+		htmlEscape(clientName),
+		errorHTML,
+		htmlEscape(clientID),
+		htmlEscape(redirectURI),
+		htmlEscape(state),
+		htmlEscape(scope),
+	)
+}
+
 const loginFormHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Sign in — %s</title>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.2/dist/full.min.css" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:system-ui,sans-serif;background:#f4f4f5;display:flex;align-items:center;justify-content:center;min-height:100vh}
-    .card{background:#fff;border-radius:10px;box-shadow:0 2px 16px rgba(0,0,0,.1);padding:2rem;width:360px}
-    h1{font-size:1.15rem;margin-bottom:1.5rem;color:#111}
-    label{display:block;font-size:.82rem;color:#555;margin:.9rem 0 .25rem}
-    input{width:100%%;padding:.6rem .75rem;border:1px solid #d1d5db;border-radius:6px;font-size:.95rem}
-    input:focus{outline:2px solid #2563eb;border-color:transparent}
-    button{margin-top:1.5rem;width:100%%;padding:.7rem;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:1rem;cursor:pointer;font-weight:500}
-    button:hover{background:#1d4ed8}
+    body { background-color: #020617; color: #f1f5f9; font-family: system-ui, -apple-system, sans-serif; overflow-x: hidden; }
+    .glass-panel { background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(24px); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+    .glass-btn { background: linear-gradient(to right, #7c3aed, #4f46e5); transition: all 0.3s; border: none; }
+    .glass-btn:hover { transform: translateY(-2px); box-shadow: 0 0 20px rgba(99,102,241,0.6); }
+    .ambient-orb { position: absolute; border-radius: 50%%; mix-blend-mode: screen; pointer-events: none; }
+    @keyframes float { 0%%, 100%% { transform: translateY(0) scale(1); } 50%% { transform: translateY(-20px) scale(1.05); } }
+    @keyframes slide-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .orb-1 { animation: float 10s infinite ease-in-out; }
+    .orb-2 { animation: float 12s infinite ease-in-out reverse; }
+    .animate-slide-up { animation: slide-up 0.5s ease-out forwards; }
   </style>
 </head>
-<body>
-  <div class="card">
-    <h1>Sign in to %s</h1>
-    <form method="POST" action="/oauth/authorize">
-      <input type="hidden" name="client_id"    value="%s">
-      <input type="hidden" name="redirect_uri" value="%s">
-      <input type="hidden" name="state"        value="%s">
-      <input type="hidden" name="scope"        value="%s">
-      <label>Email</label>
-      <input type="email"    name="email"    required autofocus  autocomplete="email">
-      <label>Password</label>
-      <input type="password" name="password" required            autocomplete="current-password">
-      <button type="submit">Sign In</button>
-    </form>
+<body class="min-h-screen flex items-center justify-center relative">
+  <div class="ambient-orb orb-1 bg-violet-600/30 w-[500px] h-[500px] top-[-10%%] left-[-10%%] blur-[80px]"></div>
+  <div class="ambient-orb orb-2 bg-indigo-600/20 w-[600px] h-[600px] bottom-[-20%%] right-[-10%%] blur-[100px]"></div>
+  
+  <div class="relative z-10 w-full max-w-md px-6 animate-slide-up">
+    <div class="glass-panel rounded-3xl p-10 flex flex-col items-center text-center">
+      <div class="w-20 h-20 mb-6 flex items-center justify-center rounded-3xl bg-gradient-to-tr from-violet-500/20 to-fuchsia-500/20 border border-white/20 shadow-[0_0_30px_rgba(139,92,246,0.3)]">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-10 h-10 text-white"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      </div>
+      
+      <h1 class="text-3xl font-extrabold tracking-tight mb-2 bg-gradient-to-br from-white via-indigo-100 to-indigo-400 bg-clip-text text-transparent">Authorize Access</h1>
+      <p class="text-slate-400 text-sm font-medium tracking-wide mb-8 uppercase">SIGN IN TO %s</p>
+      
+      %s
+      
+      <form method="POST" action="/oauth/authorize" class="w-full flex flex-col gap-5 text-left">
+        <input type="hidden" name="client_id" value="%s">
+        <input type="hidden" name="redirect_uri" value="%s">
+        <input type="hidden" name="state" value="%s">
+        <input type="hidden" name="scope" value="%s">
+        
+        <div class="form-control w-full">
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <svg class="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" /></svg>
+            </div>
+            <input type="email" name="email" required placeholder="Email Address" class="input w-full pl-12 bg-slate-900/50 border border-white/10 text-white placeholder-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all rounded-xl h-12">
+          </div>
+        </div>
+        
+        <div class="form-control w-full">
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <svg class="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+            </div>
+            <input type="password" name="password" required placeholder="Password" class="input w-full pl-12 bg-slate-900/50 border border-white/10 text-white placeholder-slate-500 focus:border-fuchsia-500 focus:ring-1 focus:ring-fuchsia-500 transition-all rounded-xl h-12">
+          </div>
+        </div>
+        
+        <button type="submit" class="btn glass-btn w-full h-14 mt-2 rounded-2xl text-white font-semibold text-lg shadow-lg">Authenticate</button>
+      </form>
+    </div>
   </div>
 </body>
 </html>`

@@ -89,6 +89,26 @@ func (s *Store) CountUsers(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+func (s *Store) UpdateUser(ctx context.Context, u model.User) error {
+	return s.db.WithContext(ctx).Save(&u).Error
+}
+
+func (s *Store) DeleteUser(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Where("id = ?", id).Delete(&model.User{}).Error
+}
+
+// ── System Logs ───────────────────────────────────────────────────────────────
+
+func (s *Store) CreateSystemLog(ctx context.Context, log model.SystemLog) error {
+	return s.db.WithContext(ctx).Create(&log).Error
+}
+
+func (s *Store) ListSystemLogs(ctx context.Context) ([]model.SystemLog, error) {
+	var logs []model.SystemLog
+	err := s.db.WithContext(ctx).Order("created_at DESC").Find(&logs).Error
+	return logs, err
+}
+
 // ── OAuth Clients ─────────────────────────────────────────────────────────────
 
 func (s *Store) GetClientByID(ctx context.Context, clientID string) (*model.OAuthClient, error) {

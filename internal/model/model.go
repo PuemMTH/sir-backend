@@ -129,3 +129,24 @@ func (n *Note) BeforeCreate(tx *gorm.DB) error {
 	}
 	return nil
 }
+
+// SystemLog represents an administrative action taken in the system.
+type SystemLog struct {
+	ID        string `gorm:"column:id;primaryKey" json:"id"`
+	Action    string `gorm:"column:action;not null" json:"action"`
+	TargetID  string `gorm:"column:target_id;not null" json:"target_id"`
+	AdminID   string `gorm:"column:admin_id;not null" json:"admin_id"`
+	Details   string `gorm:"column:details" json:"details"`
+	CreatedAt int64  `gorm:"column:created_at;autoCreateTime:unix" json:"created_at"`
+}
+
+func (l *SystemLog) BeforeCreate(tx *gorm.DB) error {
+	if l.ID == "" {
+		id, err := token.RandomString(12)
+		if err != nil {
+			return err
+		}
+		l.ID = id
+	}
+	return nil
+}
