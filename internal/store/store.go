@@ -229,3 +229,62 @@ func (s *Store) DeleteNote(ctx context.Context, userID, noteID string) error {
 		Where("id = ? AND user_id = ?", noteID, userID).
 		Delete(&model.Note{}).Error
 }
+
+// ── LaTeX Files ───────────────────────────────────────────────────────────────
+
+func (s *Store) CreateLatexFile(ctx context.Context, id, userID, name, r2Key, engine string) (*model.LatexFile, error) {
+	f := &model.LatexFile{
+		ID:     id,
+		UserID: userID,
+		Name:   name,
+		R2Key:  r2Key,
+		Engine: engine,
+	}
+	if err := s.db.WithContext(ctx).Create(f).Error; err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
+func (s *Store) ListLatexFiles(ctx context.Context, userID string) ([]model.LatexFile, error) {
+	var files []model.LatexFile
+	err := s.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Order("updated_at DESC").
+		Find(&files).Error
+	return files, err
+}
+
+func (s *Store) GetLatexFile(ctx context.Context, userID, fileID string) (*model.LatexFile, error) {
+	var f model.LatexFile
+	err := s.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", fileID, userID).
+		Take(&f).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &f, err
+}
+
+func (s *Store) UpdateLatexFile(ctx context.Context, f *model.LatexFile) (*model.LatexFile, error) {
+	now := time.Now().Unix()
+	err := s.db.WithContext(ctx).
+		Model(&model.LatexFile{}).
+		Where("id = ? AND user_id = ?", f.ID, f.UserID).
+		Updates(map[string]any{
+			"name":       f.Name,
+			"engine":     f.Engine,
+			"updated_at": now,
+		}).Error
+	if err != nil {
+		return nil, err
+	}
+	f.UpdatedAt = now
+	return f, nil
+}
+
+func (s *Store) DeleteLatexFile(ctx context.Context, userID, fileID string) error {
+	return s.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", fileID, userID).
+		Delete(&model.LatexFile{}).Error
+}

@@ -26,3 +26,7 @@ binding = "DB"
 database_name = "sir-db"
 database_id = "0edbbf1d-aa42-4eed-ac85-e698e9b9783a"
 migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "LATEX_BUCKET"
+bucket_name = "sir-latex-files"

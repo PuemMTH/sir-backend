@@ -20,6 +20,7 @@ type User struct {
 	AuthCodes     []AuthCode     `gorm:"foreignKey:UserID"`
 	RefreshTokens []RefreshToken `gorm:"foreignKey:UserID"`
 	Notes         []Note         `gorm:"foreignKey:UserID"`
+	LatexFiles    []LatexFile    `gorm:"foreignKey:UserID"`
 }
 
 func (u *User) BeforeCreate(tx *gorm.DB) error {
@@ -126,6 +127,30 @@ func (n *Note) BeforeCreate(tx *gorm.DB) error {
 			return err
 		}
 		n.ID = id
+	}
+	return nil
+}
+
+// LatexFile represents a LaTeX source file owned by a user, stored in R2.
+type LatexFile struct {
+	ID        string `gorm:"column:id;primaryKey" json:"id"`
+	UserID    string `gorm:"column:user_id;not null;index" json:"user_id"`
+	Name      string `gorm:"column:name;not null" json:"name"`
+	R2Key     string `gorm:"column:r2_key;not null" json:"r2_key"`
+	Engine    string `gorm:"column:engine;not null;default:lualatex" json:"engine"`
+	CreatedAt int64  `gorm:"column:created_at;autoCreateTime:unix" json:"created_at"`
+	UpdatedAt int64  `gorm:"column:updated_at;autoUpdateTime:unix" json:"updated_at"`
+
+	User User `gorm:"foreignKey:UserID" json:"-"`
+}
+
+func (f *LatexFile) BeforeCreate(tx *gorm.DB) error {
+	if f.ID == "" {
+		id, err := token.RandomString(12)
+		if err != nil {
+			return err
+		}
+		f.ID = id
 	}
 	return nil
 }

@@ -46,6 +46,16 @@ func main() {
 		middleware.AuthMiddleware,
 	))
 
+	mux.Handle("/api/latex-files", middleware.Chain(
+		http.HandlerFunc(handler.LatexFiles),
+		middleware.AuthMiddleware,
+	))
+
+	mux.Handle("/api/latex-files/", middleware.Chain(
+		http.HandlerFunc(handler.LatexFileDetail),
+		middleware.AuthMiddleware,
+	))
+
 	// Protected: any authenticated user
 	mux.Handle("/api/users/", middleware.Chain(
 		http.HandlerFunc(handler.GetUser),
