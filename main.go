@@ -58,7 +58,7 @@ func main() {
 		middleware.AuthMiddleware,
 	))
 
-	workers.Serve(mux)
+	workers.Serve(middleware.CORSMiddleware(mux))
 }
 
 func handleRoot(w http.ResponseWriter, r *http.Request) {
