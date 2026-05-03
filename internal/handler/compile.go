@@ -6,10 +6,13 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
-	"time"
+	"strings"
+	"syscall/js"
 
 	"github.com/syumai/workers/cloudflare"
 	"github.com/syumai/workers/cloudflare/r2"
@@ -18,10 +21,82 @@ import (
 	"github.com/puemmth/sir-backend/internal/store"
 )
 
-// compileClient is a dedicated HTTP client for proxying to the compile server.
-// Using a separate client (not http.DefaultClient) with an explicit timeout avoids
-// context-lifetime conflicts with the incoming CF request context.
-var compileClient = &http.Client{Timeout: 120 * time.Second}
+// jsAwaitPromise blocks until the JS Promise resolves or rejects.
+func jsAwaitPromise(promise js.Value) (js.Value, error) {
+	resCh := make(chan js.Value, 1)
+	errCh := make(chan error, 1)
+	var then, catch js.Func
+	then = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		defer then.Release()
+		resCh <- args[0]
+		return js.Undefined()
+	})
+	catch = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		defer catch.Release()
+		errCh <- errors.New(args[0].Call("toString").String())
+		return js.Undefined()
+	})
+	promise.Call("then", then).Call("catch", catch)
+	select {
+	case v := <-resCh:
+		return v, nil
+	case e := <-errCh:
+		return js.Value{}, e
+	}
+}
+
+// upstreamPost sends a JSON POST using the global fetch function invoked via
+// js.Value.Invoke (not .Call), which preserves the correct `this` binding and
+// avoids the "Illegal invocation" panic in Cloudflare Go/WASM Workers.
+// syumai/workers' fetch package uses namespace.Call("fetch", ...) which loses
+// the `this` reference — Invoke calls the function directly as a free function.
+func upstreamPost(url string, body []byte) (int, []byte, error) {
+	// Build headers and init objects
+	headersClass := js.Global().Get("Headers")
+	headersObj := headersClass.New()
+	headersObj.Call("set", "Content-Type", "application/json")
+
+	objectClass := js.Global().Get("Object")
+	initObj := objectClass.New()
+	initObj.Set("method", "POST")
+	initObj.Set("headers", headersObj)
+	initObj.Set("body", string(body))
+
+	// Invoke fetch as a free function — NOT via .Call which loses `this`
+	globalFetch := js.Global().Get("fetch")
+	if globalFetch.IsUndefined() {
+		return 0, nil, errors.New("fetch not available")
+	}
+	promise := globalFetch.Invoke(url, initObj)
+
+	// Await the response promise
+	jsRes, err := jsAwaitPromise(promise)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	status := jsRes.Get("status").Int()
+
+	// Await response.arrayBuffer()
+	bufPromise := jsRes.Call("arrayBuffer")
+	jsBuf, err := jsAwaitPromise(bufPromise)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	uint8ArrayClass := js.Global().Get("Uint8Array")
+	uint8Array := uint8ArrayClass.New(jsBuf)
+	length := uint8Array.Get("length").Int()
+	result := make([]byte, length)
+	js.CopyBytesToGo(result, uint8Array)
+
+	return status, result, nil
+}
+
+// bodyAsString reads resp body as string (used for non-200 upstream errors).
+func bodyAsString(b []byte) string {
+	return strings.TrimSpace(string(b))
+}
 
 // Compile handles POST /api/compile.
 //
@@ -38,6 +113,7 @@ func Compile(w http.ResponseWriter, r *http.Request) {
 	// always flushed before the connection closes.
 	defer func() {
 		if rec := recover(); rec != nil {
+			log.Printf("[compile] PANIC: %v", rec)
 			middleware.WriteError(w, "internal_error", http.StatusInternalServerError)
 		}
 	}()
@@ -65,22 +141,26 @@ func Compile(w http.ResponseWriter, r *http.Request) {
 	sourceHash := hex.EncodeToString(h.Sum(nil))
 
 	// ── 2. Open store ─────────────────────────────────────────────────────────
+	log.Printf("[compile] opening store...")
 	s, err := store.Open()
 	if err != nil {
+		log.Printf("[compile] store.Open failed: %v", err)
 		middleware.WriteError(w, "server_error", http.StatusInternalServerError)
 		return
 	}
 	defer s.Close()
+	log.Printf("[compile] store opened")
 
 	// ── 3. Cache lookup ───────────────────────────────────────────────────────
-	// Use a detached context so D1/R2 ops are not tied to the CF request lifetime.
 	ctx := context.Background()
-
+	log.Printf("[compile] querying pdf_cache...")
 	cached, err := s.GetPDFCache(ctx, sourceHash)
 	if err != nil {
+		log.Printf("[compile] GetPDFCache failed: %v", err)
 		middleware.WriteError(w, "server_error", http.StatusInternalServerError)
 		return
 	}
+	log.Printf("[compile] cache lookup done, hit=%v", cached != nil)
 
 	if cached != nil {
 		bucket, bucketErr := r2.NewBucket("LATEX_BUCKET")
@@ -98,6 +178,7 @@ func Compile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ── 4. Cache miss — proxy to compile server ───────────────────────────────
+	log.Printf("[compile] cache miss, proxying to upstream...")
 	compileURL := cloudflare.Getenv("COMPILE_URL")
 	if compileURL == "" {
 		middleware.WriteError(w, "compile_service_not_configured", http.StatusInternalServerError)
@@ -109,34 +190,19 @@ func Compile(w http.ResponseWriter, r *http.Request) {
 		"engine": req.Engine,
 	})
 
-	// Use context.Background() — NOT r.Context() — for the outbound request.
-	// Passing the CF incoming-request context to a net/http outbound call can
-	// trigger a WASM trap in syumai/workers because the CF context has a
-	// non-standard Done channel implementation.
-	upstreamReq, err := http.NewRequestWithContext(ctx, http.MethodPost, compileURL, bytes.NewReader(bodyBytes))
+	log.Printf("[compile] sending request to %s", compileURL)
+	statusCode, pdfBytes, err := upstreamPost(compileURL, bodyBytes)
 	if err != nil {
-		middleware.WriteError(w, "server_error", http.StatusInternalServerError)
-		return
-	}
-	upstreamReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := compileClient.Do(upstreamReq)
-	if err != nil {
+		log.Printf("[compile] upstream request failed: %v", err)
 		middleware.WriteError(w, "compile_service_unavailable", http.StatusBadGateway)
 		return
 	}
-	defer resp.Body.Close()
-
-	pdfBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		middleware.WriteError(w, "server_error", http.StatusInternalServerError)
-		return
-	}
+	log.Printf("[compile] upstream responded with status %d, %d bytes", statusCode, len(pdfBytes))
 
 	// Forward non-200 responses (e.g. 422 compile error) verbatim
-	if resp.StatusCode != http.StatusOK {
+	if statusCode != http.StatusOK {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(resp.StatusCode)
+		w.WriteHeader(statusCode)
 		w.Write(pdfBytes)
 		return
 	}
