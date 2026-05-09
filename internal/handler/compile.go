@@ -126,6 +126,10 @@ func cfCacheGet(cacheURL string) []byte {
 
 // cfCachePut stores a PDF in Cloudflare's Cache API.
 func cfCachePut(cacheURL string, data []byte) {
+	cfCachePutWithContentType(cacheURL, data, "application/pdf")
+}
+
+func cfCachePutWithContentType(cacheURL string, data []byte, contentType string) {
 	cacheObj := js.Global().Get("caches").Get("default")
 	if cacheObj.IsUndefined() {
 		return
@@ -134,7 +138,7 @@ func cfCachePut(cacheURL string, data []byte) {
 	js.CopyBytesToJS(uint8Arr, data)
 
 	headers := js.Global().Get("Headers").New()
-	headers.Call("set", "Content-Type", "application/pdf")
+	headers.Call("set", "Content-Type", contentType)
 	headers.Call("set", "Cache-Control", "public, max-age=86400")
 
 	initObj := js.Global().Get("Object").New()

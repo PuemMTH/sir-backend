@@ -286,14 +286,15 @@ func (s *Store) UpdateLatexFile(ctx context.Context, f *model.LatexFile) (*model
 
 // ── User Assets ───────────────────────────────────────────────────────────────
 
-func (s *Store) CreateUserAsset(ctx context.Context, id, userID, name, r2Key, mimeType string, size int64) (*model.UserAsset, error) {
+func (s *Store) CreateUserAsset(ctx context.Context, id, userID, name, r2Key, thumbnailR2Key, mimeType string, size int64) (*model.UserAsset, error) {
 	a := &model.UserAsset{
-		ID:       id,
-		UserID:   userID,
-		Name:     name,
-		R2Key:    r2Key,
-		MimeType: mimeType,
-		Size:     size,
+		ID:             id,
+		UserID:         userID,
+		Name:           name,
+		R2Key:          r2Key,
+		ThumbnailR2Key: thumbnailR2Key,
+		MimeType:       mimeType,
+		Size:           size,
 	}
 	if err := s.db.WithContext(ctx).Create(a).Error; err != nil {
 		return nil, err
