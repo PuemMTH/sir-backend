@@ -99,6 +99,53 @@ func bodyAsString(b []byte) string {
 	return strings.TrimSpace(string(b))
 }
 
+// cfCacheGet checks Cloudflare's Cache API for a cached PDF. Returns nil on miss or error.
+func cfCacheGet(cacheURL string) []byte {
+	cacheObj := js.Global().Get("caches").Get("default")
+	if cacheObj.IsUndefined() {
+		return nil
+	}
+	cacheReq := js.Global().Get("Request").New(cacheURL)
+	result, err := jsAwaitPromise(cacheObj.Call("match", cacheReq))
+	if err != nil || result.IsUndefined() || result.IsNull() {
+		return nil
+	}
+	jsBuf, err := jsAwaitPromise(result.Call("arrayBuffer"))
+	if err != nil {
+		return nil
+	}
+	uint8Arr := js.Global().Get("Uint8Array").New(jsBuf)
+	length := uint8Arr.Get("length").Int()
+	if length == 0 {
+		return nil
+	}
+	data := make([]byte, length)
+	js.CopyBytesToGo(data, uint8Arr)
+	return data
+}
+
+// cfCachePut stores a PDF in Cloudflare's Cache API.
+func cfCachePut(cacheURL string, data []byte) {
+	cacheObj := js.Global().Get("caches").Get("default")
+	if cacheObj.IsUndefined() {
+		return
+	}
+	uint8Arr := js.Global().Get("Uint8Array").New(len(data))
+	js.CopyBytesToJS(uint8Arr, data)
+
+	headers := js.Global().Get("Headers").New()
+	headers.Call("set", "Content-Type", "application/pdf")
+	headers.Call("set", "Cache-Control", "public, max-age=86400")
+
+	initObj := js.Global().Get("Object").New()
+	initObj.Set("status", 200)
+	initObj.Set("headers", headers)
+
+	resp := js.Global().Get("Response").New(uint8Arr.Get("buffer"), initObj)
+	cacheReq := js.Global().Get("Request").New(cacheURL)
+	jsAwaitPromise(cacheObj.Call("put", cacheReq, resp)) //nolint
+}
+
 // assetFile is a file entry sent to the upstream compile server.
 type assetFile struct {
 	Name    string `json:"name"`
@@ -173,6 +220,16 @@ func Compile(w http.ResponseWriter, r *http.Request) {
 		h.Write([]byte(a.ID))
 	}
 	sourceHash := hex.EncodeToString(h.Sum(nil))
+	cfCacheURL := "https://cache.internal/pdf/" + sourceHash
+
+	// ── 4a. Cloudflare edge cache (fastest path) ──────────────────────────────
+	if pdf := cfCacheGet(cfCacheURL); len(pdf) > 0 {
+		log.Printf("[compile] CF cache hit (%d bytes)", len(pdf))
+		w.Header().Set("Content-Type", "application/pdf")
+		w.Header().Set("X-Cache", "CF-HIT")
+		w.Write(pdf)
+		return
+	}
 
 	// ── 4. Cache lookup ───────────────────────────────────────────────────────
 	log.Printf("[compile] querying pdf_cache...")
@@ -189,11 +246,14 @@ func Compile(w http.ResponseWriter, r *http.Request) {
 		if bucketErr == nil {
 			obj, getErr := bucket.Get(cached.R2Key)
 			if getErr == nil && obj != nil {
-				// Cache hit — serve from R2
-				w.Header().Set("Content-Type", "application/pdf")
-				w.Header().Set("X-Cache", "HIT")
-				io.Copy(w, obj.Body)
-				return
+				pdf, readErr := io.ReadAll(obj.Body)
+				if readErr == nil {
+					cfCachePut(cfCacheURL, pdf)
+					w.Header().Set("Content-Type", "application/pdf")
+					w.Header().Set("X-Cache", "HIT")
+					w.Write(pdf)
+					return
+				}
 			}
 		}
 		// R2 object gone (stale record) — fall through and recompile
@@ -265,7 +325,8 @@ func Compile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// ── 6. Return PDF ─────────────────────────────────────────────────────────
+	// ── 8. Return PDF ─────────────────────────────────────────────────────────
+	cfCachePut(cfCacheURL, pdfBytes)
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("X-Cache", "MISS")
 	w.Write(pdfBytes)
