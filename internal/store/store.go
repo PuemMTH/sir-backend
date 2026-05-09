@@ -284,6 +284,49 @@ func (s *Store) UpdateLatexFile(ctx context.Context, f *model.LatexFile) (*model
 	return f, nil
 }
 
+// ── User Assets ───────────────────────────────────────────────────────────────
+
+func (s *Store) CreateUserAsset(ctx context.Context, id, userID, name, r2Key, mimeType string, size int64) (*model.UserAsset, error) {
+	a := &model.UserAsset{
+		ID:       id,
+		UserID:   userID,
+		Name:     name,
+		R2Key:    r2Key,
+		MimeType: mimeType,
+		Size:     size,
+	}
+	if err := s.db.WithContext(ctx).Create(a).Error; err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
+func (s *Store) ListUserAssets(ctx context.Context, userID string) ([]model.UserAsset, error) {
+	var assets []model.UserAsset
+	err := s.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Order("created_at DESC").
+		Find(&assets).Error
+	return assets, err
+}
+
+func (s *Store) GetUserAsset(ctx context.Context, userID, assetID string) (*model.UserAsset, error) {
+	var a model.UserAsset
+	err := s.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", assetID, userID).
+		Take(&a).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &a, err
+}
+
+func (s *Store) DeleteUserAsset(ctx context.Context, userID, assetID string) error {
+	return s.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", assetID, userID).
+		Delete(&model.UserAsset{}).Error
+}
+
 // ── PDF Cache ────────────────────────────────────────────────────────────────
 
 // GetPDFCache returns a cached entry by its MD5 hash, or nil if not found.

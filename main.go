@@ -61,6 +61,16 @@ func main() {
 		middleware.AuthMiddleware,
 	))
 
+	mux.Handle("/api/assets", middleware.Chain(
+		http.HandlerFunc(handler.Assets),
+		middleware.AuthMiddleware,
+	))
+
+	mux.Handle("/api/assets/", middleware.Chain(
+		http.HandlerFunc(handler.AssetDetail),
+		middleware.AuthMiddleware,
+	))
+
 	// Protected: any authenticated user
 	mux.Handle("/api/users/", middleware.Chain(
 		http.HandlerFunc(handler.GetUser),

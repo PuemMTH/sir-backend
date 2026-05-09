@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"log"
@@ -28,9 +29,15 @@ var allowedEngines = map[string]bool{
 	"xelatex":  true,
 }
 
+type fileEntry struct {
+	Name    string `json:"name"`    // original filename (e.g. "photo.jpg")
+	Content string `json:"content"` // base64-encoded file content
+}
+
 type compileRequest struct {
-	Source string `json:"source"`
-	Engine string `json:"engine"`
+	Source string      `json:"source"`
+	Engine string      `json:"engine"`
+	Files  []fileEntry `json:"files"` // optional assets written to the temp dir
 }
 
 type errorResponse struct {
@@ -100,6 +107,19 @@ func compileHandler(w http.ResponseWriter, r *http.Request) {
 	if err := os.WriteFile(texPath, []byte(req.Source), 0o644); err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to write source"})
 		return
+	}
+
+	// Write uploaded assets (images, etc.) into the same temp dir so LaTeX can reference them by name.
+	for _, f := range req.Files {
+		name := filepath.Base(f.Name)
+		if name == "" || name == "." {
+			continue
+		}
+		data, err := base64.StdEncoding.DecodeString(f.Content)
+		if err != nil {
+			continue
+		}
+		_ = os.WriteFile(filepath.Join(tmpDir, name), data, 0o644)
 	}
 
 	args := []string{

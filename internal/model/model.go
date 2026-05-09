@@ -21,6 +21,7 @@ type User struct {
 	RefreshTokens []RefreshToken `gorm:"foreignKey:UserID"`
 	Notes         []Note         `gorm:"foreignKey:UserID"`
 	LatexFiles    []LatexFile    `gorm:"foreignKey:UserID"`
+	UserAssets    []UserAsset    `gorm:"foreignKey:UserID"`
 }
 
 func (u *User) BeforeCreate(tx *gorm.DB) error {
@@ -165,6 +166,33 @@ type PDFCache struct {
 
 // TableName overrides GORM's default pluralisation (pdf_caches → pdf_cache).
 func (PDFCache) TableName() string { return "pdf_cache" }
+
+// UserAsset represents an uploaded file (image, font, etc.) owned by a user, stored in R2.
+// The name field preserves the original filename so LaTeX code can reference it directly.
+type UserAsset struct {
+	ID        string `gorm:"column:id;primaryKey" json:"id"`
+	UserID    string `gorm:"column:user_id;not null;index" json:"user_id"`
+	Name      string `gorm:"column:name;not null" json:"name"`
+	R2Key     string `gorm:"column:r2_key;not null" json:"r2_key"`
+	MimeType  string `gorm:"column:mime_type;not null;default:application/octet-stream" json:"mime_type"`
+	Size      int64  `gorm:"column:size;not null;default:0" json:"size"`
+	CreatedAt int64  `gorm:"column:created_at;autoCreateTime:unix" json:"created_at"`
+
+	User User `gorm:"foreignKey:UserID" json:"-"`
+}
+
+func (a *UserAsset) TableName() string { return "user_assets" }
+
+func (a *UserAsset) BeforeCreate(tx *gorm.DB) error {
+	if a.ID == "" {
+		id, err := token.RandomString(12)
+		if err != nil {
+			return err
+		}
+		a.ID = id
+	}
+	return nil
+}
 
 // SystemLog represents an administrative action taken in the system.
 type SystemLog struct {

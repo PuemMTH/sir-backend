@@ -69,6 +69,18 @@ const openapiJSON = `{
           "updated_at": { "type": "integer" }
         }
       },
+      "UserAsset": {
+        "type": "object",
+        "properties": {
+          "id":         { "type": "string" },
+          "user_id":    { "type": "string" },
+          "name":       { "type": "string", "description": "Original filename" },
+          "r2_key":     { "type": "string" },
+          "mime_type":  { "type": "string" },
+          "size":       { "type": "integer", "description": "File size in bytes" },
+          "created_at": { "type": "integer" }
+        }
+      },
       "TokenResponse": {
         "type": "object",
         "properties": {
@@ -640,6 +652,71 @@ const openapiJSON = `{
         "responses": {
           "204": { "description": "Deleted" },
           "401": { "description": "Invalid or missing token" }
+        }
+      }
+    },
+    "/api/assets": {
+      "get": {
+        "tags": ["Assets"],
+        "summary": "List uploaded assets for authenticated user",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/UserAsset" } }
+              }
+            }
+          },
+          "401": { "description": "Invalid or missing token" }
+        }
+      },
+      "post": {
+        "tags": ["Assets"],
+        "summary": "Upload a new asset file (max 10 MB)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserAsset" }
+              }
+            }
+          },
+          "400": { "description": "Missing file field" },
+          "401": { "description": "Invalid or missing token" },
+          "413": { "description": "File exceeds 10 MB limit" }
+        }
+      }
+    },
+    "/api/assets/{id}": {
+      "delete": {
+        "tags": ["Assets"],
+        "summary": "Delete an asset by ID",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "401": { "description": "Invalid or missing token" },
+          "404": { "description": "Not found" }
         }
       }
     }

@@ -507,6 +507,77 @@ Delete the file from R2 (best-effort) and remove the D1 row.
 
 ---
 
+### GET /api/assets
+
+List all uploaded asset files owned by the authenticated user, ordered by upload date (newest first).
+
+**Response** `200 OK`
+
+```json
+[
+  {
+    "id": "abc123",
+    "user_id": "xyz789",
+    "name": "photo.jpg",
+    "r2_key": "assets/xyz789/abc123",
+    "mime_type": "image/jpeg",
+    "size": 204800,
+    "created_at": 1714000000
+  }
+]
+```
+
+---
+
+### POST /api/assets
+
+Upload a new asset file. Content is stored in R2; metadata (original filename, MIME type, size) is stored in D1. Maximum file size is 10 MB.
+
+**Request Body** — `multipart/form-data`
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `file` | Yes | File to upload (any type) |
+
+**Response** `201 Created`
+
+```json
+{
+  "id": "abc123",
+  "user_id": "xyz789",
+  "name": "photo.jpg",
+  "r2_key": "assets/xyz789/abc123",
+  "mime_type": "image/jpeg",
+  "size": 204800,
+  "created_at": 1714000000
+}
+```
+
+**Errors**
+
+| Code | Reason |
+|------|--------|
+| 400 | Missing `file` field or malformed multipart |
+| 401 | Invalid token |
+| 413 | File exceeds 10 MB |
+
+---
+
+### DELETE /api/assets/:id
+
+Delete the asset from R2 (best-effort) and remove the D1 row.
+
+**Response** `204 No Content`
+
+**Errors**
+
+| Code | Reason |
+|------|--------|
+| 401 | Invalid token |
+| 404 | Asset not found or not owned by user |
+
+---
+
 ## Route Summary
 
 | Method | Path | Auth | Description |
@@ -527,6 +598,9 @@ Delete the file from R2 (best-effort) and remove the D1 row.
 | GET | `/api/latex-files/:id` | JWT | Get file metadata + content |
 | PUT | `/api/latex-files/:id` | JWT | Update name, engine, or content |
 | DELETE | `/api/latex-files/:id` | JWT | Delete a LaTeX file |
+| GET | `/api/assets` | JWT | List own uploaded assets |
+| POST | `/api/assets` | JWT | Upload a new asset file (max 10 MB) |
+| DELETE | `/api/assets/:id` | JWT | Delete an uploaded asset |
 
 ---
 

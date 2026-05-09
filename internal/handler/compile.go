@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -98,14 +99,22 @@ func bodyAsString(b []byte) string {
 	return strings.TrimSpace(string(b))
 }
 
+// assetFile is a file entry sent to the upstream compile server.
+type assetFile struct {
+	Name    string `json:"name"`
+	Content string `json:"content"` // base64-encoded
+}
+
 // Compile handles POST /api/compile.
 //
 // Flow:
-//  1. Compute MD5(engine + ":" + source) as the cache key.
-//  2. Look up the hash in the pdf_cache D1 table.
-//  3. Cache hit  → stream the PDF directly from R2 (X-Cache: HIT).
-//  4. Cache miss → proxy to the compile server, store the resulting PDF in R2,
-//     record the hash in D1, then return the PDF (X-Cache: MISS).
+//  1. Fetch the user's uploaded assets from D1 (metadata only).
+//  2. Compute MD5(engine + ":" + source + asset IDs) as the cache key.
+//  3. Look up the hash in the pdf_cache D1 table.
+//  4. Cache hit  → stream the PDF directly from R2 (X-Cache: HIT).
+//  5. Cache miss → fetch asset contents from R2, proxy everything to the
+//     compile server, store the resulting PDF in R2, record the hash in D1,
+//     then return the PDF (X-Cache: MISS).
 //
 // Compile errors from the upstream server are forwarded verbatim to the caller.
 func Compile(w http.ResponseWriter, r *http.Request) {
@@ -135,12 +144,9 @@ func Compile(w http.ResponseWriter, r *http.Request) {
 		req.Engine = "lualatex"
 	}
 
-	// ── 1. Compute cache key ──────────────────────────────────────────────────
-	h := md5.New()
-	h.Write([]byte(req.Engine + ":" + req.Source))
-	sourceHash := hex.EncodeToString(h.Sum(nil))
+	claims := middleware.ClaimsFromCtx(r.Context())
 
-	// ── 2. Open store ─────────────────────────────────────────────────────────
+	// ── 1. Open store ─────────────────────────────────────────────────────────
 	log.Printf("[compile] opening store...")
 	s, err := store.Open()
 	if err != nil {
@@ -151,8 +157,24 @@ func Compile(w http.ResponseWriter, r *http.Request) {
 	defer s.Close()
 	log.Printf("[compile] store opened")
 
-	// ── 3. Cache lookup ───────────────────────────────────────────────────────
+	// ── 2. Fetch user asset metadata (IDs only for cache key) ─────────────────
 	ctx := context.Background()
+	assets, err := s.ListUserAssets(ctx, claims.Sub)
+	if err != nil {
+		log.Printf("[compile] ListUserAssets failed: %v", err)
+		// Non-fatal — compile without assets
+		assets = nil
+	}
+
+	// ── 3. Compute cache key (source + engine + asset IDs) ───────────────────
+	h := md5.New()
+	h.Write([]byte(req.Engine + ":" + req.Source))
+	for _, a := range assets {
+		h.Write([]byte(a.ID))
+	}
+	sourceHash := hex.EncodeToString(h.Sum(nil))
+
+	// ── 4. Cache lookup ───────────────────────────────────────────────────────
 	log.Printf("[compile] querying pdf_cache...")
 	cached, err := s.GetPDFCache(ctx, sourceHash)
 	if err != nil {
@@ -177,17 +199,41 @@ func Compile(w http.ResponseWriter, r *http.Request) {
 		// R2 object gone (stale record) — fall through and recompile
 	}
 
-	// ── 4. Cache miss — proxy to compile server ───────────────────────────────
-	log.Printf("[compile] cache miss, proxying to upstream...")
+	// ── 5. Cache miss — fetch asset contents from R2 ──────────────────────────
+	log.Printf("[compile] cache miss, fetching assets from R2...")
+	var files []assetFile
+	if len(assets) > 0 {
+		bucket, bucketErr := r2.NewBucket("LATEX_BUCKET")
+		if bucketErr == nil {
+			for _, asset := range assets {
+				obj, getErr := bucket.Get(asset.R2Key)
+				if getErr != nil || obj == nil {
+					continue
+				}
+				data, readErr := io.ReadAll(obj.Body)
+				if readErr != nil {
+					continue
+				}
+				files = append(files, assetFile{
+					Name:    asset.Name,
+					Content: base64.StdEncoding.EncodeToString(data),
+				})
+			}
+		}
+	}
+	log.Printf("[compile] fetched %d asset(s), proxying to upstream...", len(files))
+
+	// ── 6. Proxy to compile server ────────────────────────────────────────────
 	compileURL := cloudflare.Getenv("COMPILE_URL")
 	if compileURL == "" {
 		middleware.WriteError(w, "compile_service_not_configured", http.StatusInternalServerError)
 		return
 	}
 
-	bodyBytes, _ := json.Marshal(map[string]string{
+	bodyBytes, _ := json.Marshal(map[string]any{
 		"source": req.Source,
 		"engine": req.Engine,
+		"files":  files,
 	})
 
 	log.Printf("[compile] sending request to %s", compileURL)
@@ -207,7 +253,7 @@ func Compile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ── 5. Store PDF in R2 and record in D1 (best-effort) ────────────────────
+	// ── 7. Store PDF in R2 and record in D1 (best-effort) ────────────────────
 	r2Key := fmt.Sprintf("pdf/%s.pdf", sourceHash)
 	bucket, bucketErr := r2.NewBucket("LATEX_BUCKET")
 	if bucketErr == nil {
