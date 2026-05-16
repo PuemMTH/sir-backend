@@ -12,7 +12,7 @@ import (
 
 	"github.com/syumai/workers/cloudflare/d1"
 
-	"github.com/puemmth/sir-backend/internal/model"
+	"github.com/sir-labs/sir-api/internal/model"
 )
 
 // Store wraps a GORM DB and provides all data-access operations.

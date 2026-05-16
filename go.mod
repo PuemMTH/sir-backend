@@ -1,4 +1,4 @@
-module github.com/puemmth/sir-backend
+module github.com/sir-labs/sir-api
 
 go 1.25.0
 

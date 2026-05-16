@@ -3,7 +3,7 @@ package model
 import (
 	"time"
 
-	"github.com/puemmth/sir-backend/internal/token"
+	"github.com/sir-labs/sir-api/internal/token"
 	"gorm.io/gorm"
 )
 

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/puemmth/sir-backend/internal/middleware"
-	"github.com/puemmth/sir-backend/internal/store"
+	"github.com/sir-labs/sir-api/internal/middleware"
+	"github.com/sir-labs/sir-api/internal/store"
 )
 
 // Notes handles GET /api/notes (list) and POST /api/notes (create).

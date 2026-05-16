@@ -10,10 +10,10 @@ import (
 
 	"github.com/syumai/workers/cloudflare"
 
-	"github.com/puemmth/sir-backend/internal/middleware"
-	"github.com/puemmth/sir-backend/internal/model"
-	"github.com/puemmth/sir-backend/internal/store"
-	"github.com/puemmth/sir-backend/internal/token"
+	"github.com/sir-labs/sir-api/internal/middleware"
+	"github.com/sir-labs/sir-api/internal/model"
+	"github.com/sir-labs/sir-api/internal/store"
+	"github.com/sir-labs/sir-api/internal/token"
 )
 
 // Authorize handles GET /oauth/authorize (login form) and POST /oauth/authorize (submit).

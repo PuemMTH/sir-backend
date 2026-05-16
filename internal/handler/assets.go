@@ -9,9 +9,9 @@ import (
 
 	"github.com/syumai/workers/cloudflare/r2"
 
-	"github.com/puemmth/sir-backend/internal/middleware"
-	"github.com/puemmth/sir-backend/internal/store"
-	"github.com/puemmth/sir-backend/internal/token"
+	"github.com/sir-labs/sir-api/internal/middleware"
+	"github.com/sir-labs/sir-api/internal/store"
+	"github.com/sir-labs/sir-api/internal/token"
 )
 
 const maxAssetSize = 10 << 20    // 10 MB

@@ -6,8 +6,8 @@ import (
 
 	"github.com/syumai/workers"
 
-	"github.com/puemmth/sir-backend/internal/handler"
-	"github.com/puemmth/sir-backend/internal/middleware"
+	"github.com/sir-labs/sir-api/internal/handler"
+	"github.com/sir-labs/sir-api/internal/middleware"
 )
 
 func main() {

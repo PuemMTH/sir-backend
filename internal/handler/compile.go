@@ -18,8 +18,8 @@ import (
 	"github.com/syumai/workers/cloudflare"
 	"github.com/syumai/workers/cloudflare/r2"
 
-	"github.com/puemmth/sir-backend/internal/middleware"
-	"github.com/puemmth/sir-backend/internal/store"
+	"github.com/sir-labs/sir-api/internal/middleware"
+	"github.com/sir-labs/sir-api/internal/store"
 )
 
 // jsAwaitPromise blocks until the JS Promise resolves or rejects.

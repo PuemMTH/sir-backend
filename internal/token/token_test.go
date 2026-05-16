@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/puemmth/sir-backend/internal/token"
+	"github.com/sir-labs/sir-api/internal/token"
 )
 
 const testSecret = "test-secret-key"

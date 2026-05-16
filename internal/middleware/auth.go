@@ -8,7 +8,7 @@ import (
 
 	"github.com/syumai/workers/cloudflare"
 
-	"github.com/puemmth/sir-backend/internal/token"
+	"github.com/sir-labs/sir-api/internal/token"
 )
 
 type contextKey string
