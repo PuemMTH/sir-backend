@@ -23,8 +23,8 @@ command = "make build-std"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "sir-db"
-database_id = "0edbbf1d-aa42-4eed-ac85-e698e9b9783a"
+database_name = "sir-api-db"
+database_id = "cf691922-2ecd-456f-9de6-3f7388c411fe"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
