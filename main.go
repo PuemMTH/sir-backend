@@ -19,23 +19,7 @@ func main() {
 	mux.HandleFunc("/api/docs/openapi.json", handler.DocsJSON)
 	mux.HandleFunc("/api/docs", handler.DocsUI)
 
-	// OAuth 2.0 Authorization Code Flow (Loopback Interface Redirection — RFC 8252)
-	mux.HandleFunc("/oauth/authorize", handler.Authorize)
-	mux.HandleFunc("/oauth/token", handler.Token)
-	mux.HandleFunc("/oauth/revoke", handler.Revoke)
-
-	// Initial setup: creates first admin user + default client (runs once)
-	mux.HandleFunc("/setup", handler.Setup)
-
-	// Public: self-registration
-	mux.HandleFunc("/register", handler.Register)
-
 	// Protected: any authenticated user
-	mux.Handle("/api/me", middleware.Chain(
-		http.HandlerFunc(handler.Me),
-		middleware.AuthMiddleware,
-	))
-
 	mux.Handle("/api/notes", middleware.Chain(
 		http.HandlerFunc(handler.Notes),
 		middleware.AuthMiddleware,
@@ -71,36 +55,14 @@ func main() {
 		middleware.AuthMiddleware,
 	))
 
-	// Protected: any authenticated user
-	mux.Handle("/api/users/", middleware.Chain(
-		http.HandlerFunc(handler.GetUser),
-		middleware.AuthMiddleware,
-	))
-
-	// Protected: any authenticated user (list + create)
-	mux.Handle("/api/admin/users", middleware.Chain(
-		http.HandlerFunc(handler.AdminUsers),
-		middleware.AuthMiddleware,
-	))
-
-	mux.Handle("/api/admin/users/", middleware.Chain(
-		http.HandlerFunc(handler.AdminUserDetail),
-		middleware.AuthMiddleware,
-	))
-
-	mux.Handle("/api/admin/logs", middleware.Chain(
-		http.HandlerFunc(handler.AdminLogs),
-		middleware.AuthMiddleware,
-	))
-
 	workers.Serve(middleware.CORSMiddleware(mux))
 }
 
 func handleRoot(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"name":    "sir-backend",
-		"version": "1.1.0",
+		"name":    "sir-api",
+		"version": "2.0.0",
 	})
 }
 
