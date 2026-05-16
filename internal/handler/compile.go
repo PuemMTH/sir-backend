@@ -288,7 +288,10 @@ func Compile(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[compile] fetched %d asset(s), proxying to upstream...", len(files))
 
 	// ── 6. Proxy to compile server ────────────────────────────────────────────
-	compileURL := cloudflare.Getenv("COMPILE_URL")
+	compileURL, _ := s.GetSetting(ctx, "compile_url")
+	if compileURL == "" {
+		compileURL = cloudflare.Getenv("COMPILE_URL")
+	}
 	if compileURL == "" {
 		middleware.WriteError(w, "compile_service_not_configured", http.StatusInternalServerError)
 		return

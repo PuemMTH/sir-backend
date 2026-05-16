@@ -82,3 +82,10 @@ func (a *UserAsset) BeforeCreate(_ *gorm.DB) error {
 	}
 	return nil
 }
+
+// Setting is a key/value system configuration entry.
+type Setting struct {
+	Key       string `gorm:"column:key;primaryKey"          json:"key"`
+	Value     string `gorm:"column:value;not null"          json:"value"`
+	UpdatedAt int64  `gorm:"column:updated_at;autoUpdateTime:unix" json:"updated_at"`
+}

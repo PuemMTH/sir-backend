@@ -33,3 +33,5 @@ bucket_name = "sir-latex-files"
 
 [vars]
 COMPILE_URL = "https://ipulab.com/service/latex-server/compile"
+
+

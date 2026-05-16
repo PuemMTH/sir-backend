@@ -55,6 +55,13 @@ func main() {
 		middleware.AuthMiddleware,
 	))
 
+	// Admin only
+	mux.Handle("/api/admin/settings", middleware.Chain(
+		http.HandlerFunc(handler.Settings),
+		middleware.AuthMiddleware,
+		middleware.RequireRole("admin"),
+	))
+
 	workers.Serve(middleware.CORSMiddleware(mux))
 }
 

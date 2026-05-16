@@ -204,6 +204,32 @@ func (s *Store) GetPDFCache(ctx context.Context, sourceHash string) (*model.PDFC
 	return &c, err
 }
 
+// ── Settings ─────────────────────────────────────────────────────────────────
+
+func (s *Store) GetSetting(ctx context.Context, key string) (string, error) {
+	var st model.Setting
+	err := s.db.WithContext(ctx).Where("key = ?", key).Take(&st).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+	return st.Value, err
+}
+
+func (s *Store) UpsertSetting(ctx context.Context, key, value string) error {
+	return s.db.WithContext(ctx).Exec(
+		"INSERT INTO settings (key, value, updated_at) VALUES (?, ?, unixepoch()) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+		key, value,
+	).Error
+}
+
+func (s *Store) ListSettings(ctx context.Context) ([]model.Setting, error) {
+	var settings []model.Setting
+	err := s.db.WithContext(ctx).Order("key ASC").Find(&settings).Error
+	return settings, err
+}
+
+// ── PDF Cache ────────────────────────────────────────────────────────────────
+
 func (s *Store) CreatePDFCache(ctx context.Context, sourceHash, r2Key, engine string) error {
 	c := &model.PDFCache{
 		SourceHash: sourceHash,
